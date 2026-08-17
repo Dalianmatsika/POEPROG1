@@ -21,7 +21,6 @@ public class WardManager {
         }
     }
 
-    // Fixed: Added missing findBedPosition helper method
     private int[] findBedPosition(String bedNumber) {
         int count = 1;
         for (int r = 0; r < 4; r++) {
