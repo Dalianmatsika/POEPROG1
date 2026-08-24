@@ -1,0 +1,2 @@
+# Medicare Hospital patient admission system 
+This project is a console based Java application developed for MediCare Hospital to replace Manual paper records with an in memory patient and bed management system.it allows staff to perform patient operations such as registering, searching, updating, and deleting records.It sorts records by surname or ID, manages a 20 bed ward layout exclusively for inpatients, calculate live occupancy metrics, and enforce rules through Junit Test and object oriented programming structure like inheritance and enums.
