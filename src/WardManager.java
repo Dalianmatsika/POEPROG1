@@ -13,51 +13,38 @@ public class WardManager {
     }
 
     private void initializeBeds() {
-        int count = 1;
-        for (int r = 0; r < 4; r++) {
-            for (int c = 0; c < 5; c++) {
-                bedLayout[r][c] = String.format("B%02d", count++);
+        int bedNum = 1;
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 5; j++) {
+                bedLayout[i][j] = String.format("B%02d", bedNum++);
             }
         }
     }
 
-    private int[] findBedPosition(String bedNumber) {
-        int count = 1;
-        for (int r = 0; r < 4; r++) {
-            for (int c = 0; c < 5; c++) {
-                String id = String.format("B%02d", count++);
-                if (id.equalsIgnoreCase(bedNumber)) {
-                    return new int[]{r, c};
-                }
-            }
+    public boolean registerPatient(Patient patient) {
+        if (findPatientById(patient.getPatientId()) != null) {
+            return false; // Duplicate Patient ID
         }
-        return null;
+        patients.add(patient);
+        return true;
     }
 
-    public boolean registerPatient(Patient p) {
-        for (Patient existing : patients) {
-            if (existing.getPatientId().equalsIgnoreCase(p.getPatientId())) {
-                throw new IllegalArgumentException("Patient ID already exists.");
-            }
-        }
-        return patients.add(p);
-    }
-
-    public Patient searchPatient(String patientId) {
+    public Patient findPatientById(String id) {
         for (Patient p : patients) {
-            if (p.getPatientId().equalsIgnoreCase(patientId)) {
+            if (p.getPatientId().equalsIgnoreCase(id)) {
                 return p;
             }
         }
         return null;
     }
 
-    public boolean updatePatient(String id, String firstName, String lastName, int age, String condition) {
-        Patient p = searchPatient(id);
+    public boolean updatePatient(String id, String firstName, String lastName, int age, String gender, String condition) {
+        Patient p = findPatientById(id);
         if (p != null) {
             p.setFirstName(firstName);
             p.setLastName(lastName);
             p.setAge(age);
+            p.setGender(gender);
             p.setMedicalCondition(condition);
             return true;
         }
@@ -65,109 +52,129 @@ public class WardManager {
     }
 
     public boolean deletePatient(String id) {
-        Patient p = searchPatient(id);
+        Patient p = findPatientById(id);
         if (p != null) {
-            if (p instanceof Inpatient) {
-                releaseBed(((Inpatient) p).getBedNumber());
+            if (p instanceof Inpatient inpatient) {
+                releaseBed(inpatient.getBedNumber());
             }
-            return patients.remove(p);
+            patients.remove(p);
+            return true;
         }
         return false;
     }
 
-    public boolean allocateBed(String patientId, String bedNumber) {
-        Patient p = searchPatient(patientId);
-        if (p == null) throw new IllegalArgumentException("Patient not found.");
-        if (p.getCategory() != PatientCategory.INPATIENT) {
-            throw new IllegalArgumentException("Only inpatients can be allocated a bed.");
+    public boolean isBedOccupied(String bedCode) {
+        for (Patient p : patients) {
+            if (p instanceof Inpatient inp && inp.getBedNumber().equalsIgnoreCase(bedCode)) {
+                return true;
+            }
         }
-        if (getOccupiedBedsCount() >= 20) {
-            throw new IllegalStateException("Ward is fully occupied.");
-        }
-
-        int[] pos = findBedPosition(bedNumber);
-        if (pos == null) throw new IllegalArgumentException("Invalid bed ID.");
-        if (bedLayout[pos[0]][pos[1]].equals("[X]")) {
-            throw new IllegalStateException("Bed is already occupied.");
-        }
-
-        bedLayout[pos[0]][pos[1]] = "[X]";
-        if (!(p instanceof Inpatient)) {
-            patients.remove(p);
-            Inpatient inpatient = new Inpatient(p.getPatientId(), p.getFirstName(), p.getLastName(), p.getAge(), p.getGender(), p.getMedicalCondition(), wardNumber, bedNumber);
-            patients.add(inpatient);
-        } else {
-            ((Inpatient) p).setBedNumber(bedNumber);
-        }
-        return true;
+        return false;
     }
 
-    public boolean releaseBed(String bedNumber) {
-        int count = 1;
-        for (int r = 0; r < 4; r++) {
-            for (int c = 0; c < 5; c++) {
-                String id = String.format("B%02d", count++);
-                if (id.equalsIgnoreCase(bedNumber)) {
-                    if (bedLayout[r][c].equals("[X]")) {
-                        bedLayout[r][c] = id;
-                        for (Patient p : patients) {
-                            if (p instanceof Inpatient && ((Inpatient) p).getBedNumber().equalsIgnoreCase(bedNumber)) {
-                                ((Inpatient) p).setBedNumber("None");
-                            }
-                        }
-                        return true;
-                    }
-                    return false;
+    public boolean isBedValid(String bedCode) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 5; j++) {
+                if (bedLayout[i][j].equalsIgnoreCase(bedCode)) {
+                    return true;
                 }
             }
         }
         return false;
     }
 
+    public boolean allocateBed(String patientId, String bedCode) {
+        Patient p = findPatientById(patientId);
+        if (p == null || !isBedValid(bedCode) || isBedOccupied(bedCode) || getOccupiedBedCount() >= 20) {
+            return false;
+        }
+
+        if (p.getCategory() == PatientCategory.INPATIENT) {
+            ((Inpatient) p).setBedNumber(bedCode.toUpperCase());
+            ((Inpatient) p).setWardNumber(wardNumber);
+        } else {
+            // Convert existing patient to Inpatient
+            Inpatient inp = new Inpatient(p.getPatientId(), p.getFirstName(), p.getLastName(),
+                    p.getAge(), p.getGender(), p.getMedicalCondition(), wardNumber, bedCode.toUpperCase());
+            patients.remove(p);
+            patients.add(inp);
+        }
+        return true;
+    }
+
+    public boolean releaseBed(String bedCode) {
+        for (Patient p : patients) {
+            if (p instanceof Inpatient inp && inp.getBedNumber().equalsIgnoreCase(bedCode)) {
+                inp.setBedNumber("None");
+                inp.setWardNumber("N/A");
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void displayWardLayout() {
-        for (int r = 0; r < 4; r++) {
-            for (int c = 0; c < 5; c++) {
-                System.out.print(bedLayout[r][c] + "\t");
+        System.out.println("\n=== Ward Bed Layout (4x5) ===");
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 5; j++) {
+                String bed = bedLayout[i][j];
+                if (isBedOccupied(bed)) {
+                    System.out.printf("[%s:OCC] ", bed);
+                } else {
+                    System.out.printf("[%s:AVL] ", bed);
+                }
             }
             System.out.println();
         }
     }
 
     public List<String> getAvailableBeds() {
-        List<String> list = new ArrayList<>();
-        int count = 1;
-        for (int r = 0; r < 4; r++) {
-            for (int c = 0; c < 5; c++) {
-                String id = String.format("B%02d", count++);
-                if (!bedLayout[r][c].equals("[X]")) list.add(id);
+        List<String> available = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 5; j++) {
+                String bed = bedLayout[i][j];
+                if (!isBedOccupied(bed)) {
+                    available.add(bed);
+                }
             }
         }
-        return list;
+        return available;
     }
 
     public List<String> getOccupiedBeds() {
-        List<String> list = new ArrayList<>();
-        int count = 1;
-        for (int r = 0; r < 4; r++) {
-            for (int c = 0; c < 5; c++) {
-                String id = String.format("B%02d", count++);
-                if (bedLayout[r][c].equals("[X]")) list.add(id);
+        List<String> occupied = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 5; j++) {
+                String bed = bedLayout[i][j];
+                if (isBedOccupied(bed)) {
+                    occupied.add(bed);
+                }
             }
         }
-        return list;
+        return occupied;
     }
 
-    public int getOccupiedBedsCount() { return getOccupiedBeds().size(); }
-    public int getTotalPatients() { return patients.size(); }
-    public double getOccupancyPercentage() { return (getOccupiedBedsCount() / 20.0) * 100; }
-
-    public void sortPatientsById() {
-        patients.sort(Comparator.comparing(Patient::getPatientId));
+    public int getOccupiedBedCount() {
+        return getOccupiedBeds().size();
     }
 
-    public void sortPatientsByLastName() {
-        patients.sort(Comparator.comparing(Patient::getLastName));
+    public double getOccupancyPercentage() {
+        return (getOccupiedBedCount() / 20.0) * 100.0;
     }
 
-    public List<Patient> getPatients() { return Collections.unmodifiableList(patients); }
+    public List<Patient> getPatientsSortedBySurname() {
+        List<Patient> sorted = new ArrayList<>(patients);
+        sorted.sort(Comparator.comparing(Patient::getLastName, String.CASE_INSENSITIVE_ORDER));
+        return sorted;
+    }
+
+    public List<Patient> getPatientsSortedById() {
+        List<Patient> sorted = new ArrayList<>(patients);
+        sorted.sort(Comparator.comparing(Patient::getPatientId));
+        return sorted;
+    }
+
+    public List<Patient> getAllPatients() {
+        return patients;
+    }
 }
